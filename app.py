@@ -1,52 +1,48 @@
-from flask import Flask, request, jsonify
+import gradio as gr
 from transformers import pipeline
 
-app = Flask(__name__)
-
-# 🧠 Cargamos los modelos solo una vez al iniciar la app
+# Cargamos los modelos UNA VEZ
 sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
 summarizer_pipeline = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 classifier_pipeline = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    data = request.get_json()
-    text = data.get("text", "").strip()
+def analyze_text(text):
+    if not text.strip():
+        return "N/A", "N/A", "N/A", "Texto vacío."
 
-    if not text:
-        return jsonify({"error": "Texto vacío"}), 400
+    # Sentimiento
+    sentiment = sentiment_pipeline(text)[0]["label"]
 
-    try:
-        # Análisis de sentimiento
-        sentiment_result = sentiment_pipeline(text)[0]
-        sentiment = sentiment_result["label"]
+    # Resumen
+    summary = summarizer_pipeline(text, max_length=30, min_length=5, do_sample=False)[0]["summary_text"]
 
-        # Resumen del texto
-        summary_result = summarizer_pipeline(text, max_length=30, min_length=5, do_sample=False)
-        summary = summary_result[0]["summary_text"]
+    # Clasificación
+    labels = ["Consulta", "Reclamo", "Felicitación"]
+    result = classifier_pipeline(text, candidate_labels=labels)
+    category = result["labels"][0]
 
-        # Clasificación del texto
-        categories = ["Consulta", "Reclamo", "Felicitación"]
-        classification = classifier_pipeline(text, candidate_labels=categories)
-        category = classification["labels"][0]
+    # Respuesta sugerida
+    replies = {
+        "Consulta": "Gracias por tu consulta. En breve te responderemos.",
+        "Reclamo": "Lamentamos la experiencia. Revisaremos su caso cuanto antes.",
+        "Felicitación": "¡Gracias por tu mensaje positivo!",
+    }
+    suggested_reply = replies.get(category, "Gracias por contactarnos.")
 
-        # Respuesta sugerida según la categoría
-        suggested_replies = {
-            "Consulta": "Gracias por tu consulta. En breve te responderemos.",
-            "Reclamo": "Lamentamos la experiencia. Revisaremos su caso cuanto antes.",
-            "Felicitación": "¡Gracias por tu mensaje positivo!",
-        }
-        reply = suggested_replies.get(category, "Gracias por contactarnos.")
+    return sentiment, summary, category, suggested_reply
 
-        return jsonify({
-            "sentiment": sentiment,
-            "summary": summary,
-            "category": category,
-            "suggested_reply": reply
-        })
+# Interfaz Gradio
+interface = gr.Interface(
+    fn=analyze_text,
+    inputs=gr.Textbox(lines=5, placeholder="Escribe aquí el texto a analizar..."),
+    outputs=[
+        gr.Textbox(label="Sentimiento"),
+        gr.Textbox(label="Resumen"),
+        gr.Textbox(label="Categoría"),
+        gr.Textbox(label="Respuesta Sugerida"),
+    ],
+    title="Análisis Inteligente de Texto",
+    description="Detecta sentimiento, categoría, resumen y respuesta sugerida."
+)
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+interface.launch()
