@@ -3,48 +3,50 @@ from transformers import pipeline
 
 app = Flask(__name__)
 
-# Cargar modelos
-sentiment_model = pipeline("sentiment-analysis")
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-
-def classify_category(text):
-    text = text.lower()
-    if "precio" in text or "factura" in text:
-        return "Facturación"
-    elif "reclamo" in text or "molesto" in text:
-        return "Reclamo"
-    elif "ayuda" in text or "consulta" in text:
-        return "Consulta"
-    else:
-        return "General"
-
-def generate_reply(category):
-    if category == "Reclamo":
-        return "Lamentamos la experiencia. Revisaremos su caso cuanto antes."
-    elif category == "Facturación":
-        return "Nuestro equipo de facturación revisará su solicitud."
-    elif category == "Consulta":
-        return "Gracias por su consulta. Le responderemos pronto."
-    else:
-        return "Gracias por contactarnos. Estamos trabajando en su requerimiento."
+# 🧠 Cargamos los modelos solo una vez al iniciar la app
+sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+summarizer_pipeline = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+classifier_pipeline = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
-    text = data.get("text", "")
+    text = data.get("text", "").strip()
 
-    sentiment = sentiment_model(text)[0]["label"]
-    summary = summarizer(text, max_length=40, min_length=10, do_sample=False)[0]["summary_text"]
-    category = classify_category(text)
-    reply = generate_reply(category)
+    if not text:
+        return jsonify({"error": "Texto vacío"}), 400
 
-    return jsonify({
-        "sentiment": sentiment,
-        "summary": summary,
-        "category": category,
-        "suggested_reply": reply
-    })
+    try:
+        # Análisis de sentimiento
+        sentiment_result = sentiment_pipeline(text)[0]
+        sentiment = sentiment_result["label"]
+
+        # Resumen del texto
+        summary_result = summarizer_pipeline(text, max_length=30, min_length=5, do_sample=False)
+        summary = summary_result[0]["summary_text"]
+
+        # Clasificación del texto
+        categories = ["Consulta", "Reclamo", "Felicitación"]
+        classification = classifier_pipeline(text, candidate_labels=categories)
+        category = classification["labels"][0]
+
+        # Respuesta sugerida según la categoría
+        suggested_replies = {
+            "Consulta": "Gracias por tu consulta. En breve te responderemos.",
+            "Reclamo": "Lamentamos la experiencia. Revisaremos su caso cuanto antes.",
+            "Felicitación": "¡Gracias por tu mensaje positivo!",
+        }
+        reply = suggested_replies.get(category, "Gracias por contactarnos.")
+
+        return jsonify({
+            "sentiment": sentiment,
+            "summary": summary,
+            "category": category,
+            "suggested_reply": reply
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-
