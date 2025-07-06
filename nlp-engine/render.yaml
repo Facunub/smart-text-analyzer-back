@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smart-text-analyzer
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: TRANSFORMERS_CACHE
+        value: /tmp
+    plan: free
