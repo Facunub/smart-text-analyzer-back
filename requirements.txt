@@ -1,5 +1,6 @@
 flask
 transformers
+gunicorn
 torch
 scikit-learn
 nltk
