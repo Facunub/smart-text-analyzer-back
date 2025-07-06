@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>🧠 Analizador de Texto con IA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f2f2f2;
+      padding: 40px;
+      color: #333;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #444;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-size: 16px;
+      padding: 12px;
+      margin-top: 20px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      resize: vertical;
+    }
+
+    button {
+      display: block;
+      margin: 20px auto;
+      padding: 12px 24px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .result {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      margin-top: 30px;
+    }
+
+    .badge {
+      padding: 5px 10px;
+      border-radius: 4px;
+      color: white;
+      font-weight: bold;
+    }
+
+    .positive { background-color: #4CAF50; }
+    .negative { background-color: #f44336; }
+    .neutral  { background-color: #999; }
+  </style>
+</head>
+<body>
+  <h1>🧠 Analizador de Texto con IA</h1>
+
+  <textarea id="inputText" placeholder="Escribe un mensaje para analizar..."></textarea>
+  <button onclick="analizarTexto()">Analizar Texto</button>
+
+  <div id="resultado" class="result" style="display: none;">
+    <h2>📊 Resultados del Análisis</h2>
+    <p><strong>Sentimiento:</strong> <span id="sentiment" class="badge"></span></p>
+    <p><strong>Resumen:</strong> <span id="summary"></span></p>
+    <p><strong>Categoría:</strong> <span id="category"></span></p>
+    <p><strong>Respuesta sugerida:</strong><br><em id="reply"></em></p>
+  </div>
+
+  <script>
+    async function analizarTexto() {
+      const text = document.getElementById("inputText").value.trim();
+      if (!text) {
+        alert("Por favor escribe un texto.");
+        return;
+      }
+
+      try {
+        const res = await fetch("http://localhost:5001/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+
+        if (!res.ok) throw new Error("Error en la solicitud");
+
+        const data = await res.json();
+        const sentiment = data.sentiment.toLowerCase();
+
+        const badge = document.getElementById("sentiment");
+        badge.textContent = data.sentiment;
+        badge.className = "badge " + (
+          sentiment.includes("pos") ? "positive" :
+          sentiment.includes("neg") ? "negative" : "neutral"
+        );
+
+        document.getElementById("summary").textContent = data.summary;
+        document.getElementById("category").textContent = data.category;
+        document.getElementById("reply").textContent = data.suggested_reply;
+        document.getElementById("resultado").style.display = "block";
+      } catch (e) {
+        alert("No se pudo conectar con el motor de IA.");
+        console.error(e);
+      }
+    }
+  </script>
+</body>
+</html>
